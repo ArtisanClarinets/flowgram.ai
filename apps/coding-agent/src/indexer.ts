@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import glob from 'fast-glob';
+import { Embeddings } from '@langchain/core/embeddings';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import dotenv from 'dotenv';
 
@@ -79,6 +80,7 @@ export interface DocumentChunk {
 export async function indexCodebase(
     rootDir: string,
     outputFile: string,
+    embeddings?: Embeddings,
     globPattern: string[] = ['**/*.{ts,tsx,js,jsx,py,json,md}'],
     exclude: string[] = ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/common/temp/**']
 ) {
@@ -122,11 +124,11 @@ export async function indexCodebase(
 
     console.log(`Generated ${chunks.length} chunks. Generating embeddings...`);
 
-    if (!process.env.OPENAI_API_KEY) {
-        console.warn("OPENAI_API_KEY not found. Skipping embedding generation. Index will be text-only.");
+    if (!embeddings && !process.env.OPENAI_API_KEY) {
+        console.warn("No embeddings model provided and OPENAI_API_KEY not found. Skipping embedding generation. Index will be text-only.");
         // We still save the chunks, so at least we have the text.
     } else {
-        const embeddings = new OpenAIEmbeddings({
+        const embedder = embeddings || new OpenAIEmbeddings({
             modelName: "text-embedding-3-small"
         });
 
@@ -135,7 +137,7 @@ export async function indexCodebase(
         for (let i = 0; i < chunks.length; i += batchSize) {
             const batch = chunks.slice(i, i + batchSize);
             try {
-                const vectors = await embeddings.embedDocuments(batch.map(c => c.content));
+                const vectors = await embedder.embedDocuments(batch.map(c => c.content));
                 batch.forEach((chunk, idx) => {
                     chunk.embedding = vectors[idx];
                 });

@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import { ChatOpenAI } from '@langchain/openai';
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { Embeddings } from "@langchain/core/embeddings";
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage } from '@langchain/core/messages';
 import { DocumentChunk } from './indexer';
 import dotenv from 'dotenv';
 import { z } from "zod";
+import { LLMFactory, LLMConfig } from "./llm-factory";
 
 dotenv.config();
 
@@ -32,10 +33,11 @@ interface ToolDef {
 
 export class Agent {
     private index: DocumentChunk[] = [];
-    private embeddings: OpenAIEmbeddings | null = null;
-    private llm: ChatOpenAI;
+    private embeddings: Embeddings | null = null;
+    private llm: BaseChatModel;
+    private config: LLMConfig;
 
-    constructor(indexPath: string) {
+    constructor(indexPath: string, config?: LLMConfig) {
         if (fs.existsSync(indexPath)) {
             try {
                 this.index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
@@ -46,18 +48,18 @@ export class Agent {
             console.warn(`Index file not found at ${indexPath}. Agent will work without RAG.`);
         }
 
-        if (process.env.OPENAI_API_KEY) {
-            this.embeddings = new OpenAIEmbeddings({
-                 modelName: "text-embedding-3-small"
-            });
+        // Default to OpenAI from env if no config provided
+        this.config = config || {
+            provider: "openai",
+            apiKey: process.env.OPENAI_API_KEY
+        };
 
-            this.llm = new ChatOpenAI({
-                modelName: "gpt-4o",
-                temperature: 0
-            });
-        } else {
-            console.error("OPENAI_API_KEY is missing. Agent cannot function.");
-            process.exit(1);
+        try {
+            this.llm = LLMFactory.createModel(this.config);
+            this.embeddings = LLMFactory.createEmbeddings(this.config);
+        } catch (e) {
+            console.error("Failed to initialize LLM:", e);
+            throw e;
         }
     }
 
@@ -66,8 +68,6 @@ export class Agent {
             return "";
         }
 
-        // If index doesn't have embeddings (e.g. key was missing during index), fallback to text search?
-        // For now, assume embeddings exist if we are here.
         if (!this.index[0].embedding) {
             return "";
         }
@@ -91,13 +91,14 @@ export class Agent {
         }
     }
 
-    async run(query: string) {
-        console.log(`User Query: ${query}`);
+    // Exposed for API streaming
+    async *runStream(query: string, messageHistory: BaseMessage[] = []): AsyncGenerator<string, void, unknown> {
+        // console.log(`User Query: ${query}`);
 
         const context = await this.retrieveContext(query);
-        if (context) {
-            console.log(`Retrieved context from ${context.split('File: ').length - 1} chunks.`);
-        }
+        // if (context) {
+        //    console.log(`Retrieved context from ${context.split('File: ').length - 1} chunks.`);
+        // }
 
         const tools: ToolDef[] = [
             {
@@ -108,7 +109,6 @@ export class Agent {
                 }),
                 func: async ({ path }: { path: string }) => {
                     try {
-                        // Security check: prevent reading outside cwd? For now, allow it as it is a dev tool.
                         if (!fs.existsSync(path)) return `File not found: ${path}`;
                         return fs.readFileSync(path, 'utf-8');
                     } catch (e: any) {
@@ -153,14 +153,24 @@ export class Agent {
         ];
 
         // Bind tools to the model
-        const modelWithTools = this.llm.bindTools(tools.map(t => ({
-            name: t.name,
-            description: t.description,
-            schema: t.schema
-        })));
+        // We use 'any' here because bindTools returns a Runnable which is not exactly BaseChatModel
+        // but supports .invoke. For the purpose of this script, we treat it as the runnable to invoke.
+        let modelWithTools: any = this.llm;
 
-        const messages: BaseMessage[] = [
-            new SystemMessage(`You are a skilled software engineer agent.
+        // Check if the LLM supports bindTools
+        if (typeof this.llm.bindTools === 'function') {
+            modelWithTools = this.llm.bindTools(tools.map(t => ({
+                name: t.name,
+                description: t.description,
+                schema: t.schema
+            })));
+        } else {
+            console.warn("This LLM does not support bindTools. Tools will not be available.");
+        }
+
+        // Construct initial messages
+        const currentMessages: BaseMessage[] = [
+             new SystemMessage(`You are a skilled software engineer agent.
             You have access to tools to read, write, and list files.
             You also have context from the codebase provided below.
 
@@ -168,49 +178,80 @@ export class Agent {
 
             Codebase Context:
             ${context}
-            `)
+            `),
+            ...messageHistory,
+            new HumanMessage(query)
         ];
 
-        messages.push(new HumanMessage(query));
-
         let turns = 0;
-        const maxTurns = 15; // Allow more turns for complex tasks
+        const maxTurns = 15;
 
         while (turns < maxTurns) {
             try {
-                const response = await modelWithTools.invoke(messages);
-                messages.push(response);
+                // We use invoke for tool calling loop generally, but if we want to stream the text response to user...
+                // Tool calls usually don't need to be streamed to user until they are done?
+                // Or we can stream the final response.
+
+                // For simplicity in this iteration:
+                // We will stream the FINAL response. Intermediate tool calls we just execute.
+                // However, LangChain streaming with tools is tricky.
+                // We'll use .invoke() for tool steps, and only stream if the result is a final answer.
+
+                const response = await modelWithTools.invoke(currentMessages);
+                currentMessages.push(response);
 
                 if (response.tool_calls && response.tool_calls.length > 0) {
-                    console.log(`Agent wants to use tools: ${response.tool_calls.map(tc => tc.name).join(', ')}`);
+                    // console.log(`Agent wants to use tools: ${response.tool_calls.map(tc => tc.name).join(', ')}`);
+                    yield JSON.stringify({ type: 'tool_start', tools: response.tool_calls.map((tc: any) => tc.name) }) + "\n";
 
                     for (const toolCall of response.tool_calls) {
                         const tool = tools.find(t => t.name === toolCall.name);
                         if (tool) {
-                            console.log(`Executing ${tool.name}...`);
+                            // console.log(`Executing ${tool.name}...`);
                             const result = await tool.func(toolCall.args);
-                            // console.log(`Tool result: ${result.slice(0, 100)}...`);
-                            messages.push(new ToolMessage({
+
+                            // Send tool output to client if needed?
+                            yield JSON.stringify({ type: 'tool_result', tool: tool.name, result: result }) + "\n";
+
+                            currentMessages.push(new ToolMessage({
                                 tool_call_id: toolCall.id || "unknown",
                                 content: result
                             }));
                         } else {
-                            messages.push(new ToolMessage({
+                            currentMessages.push(new ToolMessage({
                                 tool_call_id: toolCall.id || "unknown",
                                 content: "Error: Tool not found"
                             }));
                         }
                     }
                 } else {
-                    // Final response (or just a message without tool calls)
-                    console.log("Agent Response:", response.content);
+                    // Final response
+                    // console.log("Agent Response:", response.content);
+                    yield JSON.stringify({ type: 'message', content: response.content }) + "\n";
                     break;
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Error in agent loop:", e);
+                yield JSON.stringify({ type: 'error', content: e.message }) + "\n";
                 break;
             }
             turns++;
+        }
+    }
+
+    async run(query: string) {
+        // CLI Wrapper around runStream
+        for await (const chunk of this.runStream(query)) {
+            try {
+                const data = JSON.parse(chunk);
+                if (data.type === 'message') {
+                     console.log(data.content);
+                } else if (data.type === 'tool_start') {
+                    console.log(`Using tools: ${data.tools.join(', ')}`);
+                } else if (data.type === 'tool_result') {
+                    console.log(`Tool ${data.tool} finished.`);
+                }
+            } catch (e) {}
         }
     }
 }
