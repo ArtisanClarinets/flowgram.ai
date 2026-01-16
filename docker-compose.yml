@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  coding-agent:
+    build:
+      context: .
+      dockerfile: apps/coding-agent/Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./.flowgram-agent:/app/.flowgram-agent
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - flowgram-net
+
+  coding-agent-ui:
+    build:
+      context: .
+      dockerfile: apps/coding-agent-ui/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - coding-agent
+    networks:
+      - flowgram-net
+
+  demo-app:
+    build:
+      context: .
+      dockerfile: apps/demo-free-layout/Dockerfile
+    ports:
+      - "3000:80"
+    networks:
+      - flowgram-net
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - flowgram-net
+
+networks:
+  flowgram-net:
+    driver: bridge
+
+volumes:
+  ollama_data:
