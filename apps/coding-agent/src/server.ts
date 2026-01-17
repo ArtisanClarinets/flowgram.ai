@@ -148,7 +148,20 @@ res.json({ files, currentPath: dir });
         const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
             name: dirent.name,
             isDirectory: dirent.isDirectory(),
-            path: path.join(dir, dirent.name)
+// Ensure returned path is always within DEFAULT_ROOT_DIR
+// Resolve dirent path and verify it starts with DEFAULT_ROOT_DIR
+// If it doesn't, do not include it (prevent path traversal listing)
+// Otherwise, include the securely resolved path
+path: (() => {
+    const reqPath = typeof req.query.path === 'string' ? req.query.path : '';
+    const baseDir = path.resolve(DEFAULT_ROOT_DIR, reqPath);
+    const entryPath = path.resolve(baseDir, dirent.name);
+    if (!entryPath.startsWith(DEFAULT_ROOT_DIR)) {
+        // If path traversal attempt, do not reveal actual path
+        return null;
+    }
+    return entryPath;
+})()
         }));
 
         res.json({ files, currentPath: dir });
