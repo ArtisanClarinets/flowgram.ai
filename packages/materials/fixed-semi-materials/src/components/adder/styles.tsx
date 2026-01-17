@@ -5,6 +5,7 @@
 
 import styled from 'styled-components';
 import { IconPlusCircle } from '@douyinfe/semi-icons';
+import React from 'react';
 
 export const AdderWrap = styled.div<{ hovered?: boolean }>`
   width: ${(props) => (props.hovered ? 15 : 6)}px;
@@ -18,7 +19,7 @@ export const AdderWrap = styled.div<{ hovered?: boolean }>`
   cursor: pointer;
 `;
 
-export const IconPlus = styled(IconPlusCircle)`
+export const IconPlus: React.ComponentType<any> = styled(IconPlusCircle)`
   color: #3370ff;
   background-color: #fff;
   border-radius: 15px;

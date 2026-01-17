@@ -49,4 +49,4 @@ const TypeEditorContainer = <Mode extends TypeEditorMode, TypeSchema extends Par
   );
 };
 
-export const TypeEditor = fixedTSForwardRef(TypeEditorContainer);
+export const TypeEditor: any = fixedTSForwardRef(TypeEditorContainer);

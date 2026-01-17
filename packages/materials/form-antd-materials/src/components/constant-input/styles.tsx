@@ -6,6 +6,8 @@
 import styled from 'styled-components';
 import type { SelectProps } from 'antd/es/select';
 import type { InputNumberProps } from 'antd/es/input-number';
+import type { InputProps } from 'antd/es/input';
+import React from 'react';
 import { Input, InputNumber, Select } from 'antd';
 
 const commonStyle = `
@@ -18,7 +20,7 @@ const commonStyle = `
   align-items: center;
 `;
 
-export const UIInput = styled(Input)`
+export const UIInput: React.ComponentType<InputProps> = styled(Input)`
   ${commonStyle}
 `;
 export const UIInputNumber: React.ComponentType<InputNumberProps> = styled(InputNumber)`

@@ -84,16 +84,16 @@ export function ObjectTypeEditor(props: PropsType) {
         rootLevel={1}
         value={wrapValue}
         disableEditColumn={disableEditColumn}
-        onChange={(_v) => onChange?.(_v?.properties?.[rootKey])}
-        onCustomSetValue={(newType) => ({
+        onChange={(_v: any) => onChange?.(_v?.properties?.[rootKey])}
+        onCustomSetValue={(newType: any) => ({
           type: 'object',
           properties: {
             [rootKey]: newType,
           },
         })}
-        getRootSchema={(type) => type.properties![rootKey]}
+        getRootSchema={(type: any) => type.properties![rootKey]}
         viewConfigs={defaultViewConfigs}
-        onEditRowDataSource={(dataSource) => {
+        onEditRowDataSource={(dataSource: any) => {
           // 不允许该行编辑 key、required
           if (dataSource[0]) {
             dataSource[0].disableEditColumn = [
