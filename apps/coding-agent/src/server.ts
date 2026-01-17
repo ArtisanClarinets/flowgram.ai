@@ -145,7 +145,21 @@ const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
 
 res.json({ files, currentPath: dir });
 
-        const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
+// Validate and restrict user-supplied file paths to stay within a safe base directory before accessing the file system.
+const root = path.resolve(DEFAULT_ROOT_DIR);
+const targetDir = path.resolve(root, req.query.path as string || '');
+if (!targetDir.startsWith(root)) {
+    return res.status(403).json({ message: "Access denied" });
+}
+if (!fs.existsSync(targetDir)) return res.status(404).json({ message: "Path not found" });
+
+const files = fs.readdirSync(targetDir, { withFileTypes: true }).map(dirent => ({
+    name: dirent.name,
+    isDirectory: dirent.isDirectory(),
+    path: path.join(targetDir, dirent.name)
+}));
+
+res.json({ files, currentPath: targetDir });
             name: dirent.name,
             isDirectory: dirent.isDirectory(),
 // Ensure returned path is always within DEFAULT_ROOT_DIR
