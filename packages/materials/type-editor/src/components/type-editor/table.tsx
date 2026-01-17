@@ -505,4 +505,4 @@ const TableInner = <Mode extends TypeEditorMode, TypeSchema extends Partial<IJso
   );
 };
 
-export const Table = fixedTSForwardRef(TableInner);
+export const Table: any = fixedTSForwardRef(TableInner);

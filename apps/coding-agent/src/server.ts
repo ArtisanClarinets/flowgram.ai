@@ -136,23 +136,7 @@ app.get('/api/files', (req, res) => {
             return res.status(403).json({ message: "Access denied" });
         }
 
-// Resolve user-supplied dir relative to DEFAULT_ROOT_DIR and block access if outside
-const rawPath = req.query.path as string || "";
-const dir = path.resolve(DEFAULT_ROOT_DIR, rawPath);
-if (!dir.startsWith(DEFAULT_ROOT_DIR)) {
-    return res.status(403).json({ message: "Access denied" });
-}
-if (!fs.existsSync(dir)) return res.status(404).json({ message: "Path not found" });
-
-const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
-    name: dirent.name,
-    isDirectory: dirent.isDirectory(),
-    path: path.join(dir, dirent.name)
-}));
-
-res.json({ files, currentPath: dir });
-            return res.status(404).json({ message: "Path not found" });
-        }
+        if (!fs.existsSync(dir)) return res.status(404).json({ message: "Path not found" });
 
         const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
             name: dirent.name,
@@ -171,23 +155,28 @@ app.get('/api/file', (req, res) => {
     if (!filePath) return res.status(400).json({ message: "Path required" });
     try {
         // Security check: Ensure filePath is within DEFAULT_ROOT_DIR
-// Always resolve user-supplied paths relative to DEFAULT_ROOT_DIR.
-const resolvedPath = path.resolve(DEFAULT_ROOT_DIR, filePath);
+        const resolvedPath = path.resolve(DEFAULT_ROOT_DIR, filePath);
 
-// Normalize both resolvedPath and DEFAULT_ROOT_DIR for safe comparison.
-const normalizedRoot = path.resolve(DEFAULT_ROOT_DIR) + path.sep;
-if (!resolvedPath.startsWith(normalizedRoot)) {
-    return res.status(403).json({ message: "Access denied" });
-}
-        if (!resolvedPath.startsWith(DEFAULT_ROOT_DIR)) {
-             return res.status(403).json({ message: "Access denied" });
+        // Normalize both resolvedPath and DEFAULT_ROOT_DIR for safe comparison.
+        const normalizedRoot = path.resolve(DEFAULT_ROOT_DIR) + path.sep;
+        if (!resolvedPath.startsWith(normalizedRoot) && resolvedPath !== path.resolve(DEFAULT_ROOT_DIR)) {
+            // Note: resolvedPath equal to root is technically a directory, but file check below handles it.
+            // Strict check:
+            if(!resolvedPath.startsWith(normalizedRoot))
+                return res.status(403).json({ message: "Access denied" });
         }
 
-// Check if the file exists before reading it
-if (!fs.existsSync(resolvedPath)) {
-    return res.status(404).json({ message: "File not found" });
-}
-const content = fs.readFileSync(resolvedPath, 'utf-8');
+        // Check if the file exists before reading it
+        if (!fs.existsSync(resolvedPath)) {
+            return res.status(404).json({ message: "File not found" });
+        }
+
+        // Ensure it is a file
+        if (fs.statSync(resolvedPath).isDirectory()) {
+             return res.status(400).json({ message: "Path is a directory" });
+        }
+
+        const content = fs.readFileSync(resolvedPath, 'utf-8');
         res.json({ content });
     } catch (e: any) {
         res.status(500).json({ message: e.message });

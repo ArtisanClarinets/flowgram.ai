@@ -5,6 +5,7 @@
 
 import styled, { createGlobalStyle } from 'styled-components';
 import { Input, Typography } from '@douyinfe/semi-ui';
+import React from 'react';
 
 export const KeyViewContainer = styled.div<{
   disabled?: boolean;
@@ -60,7 +61,7 @@ export const KeyEditorContainer = styled.div`
   }
 `;
 
-export const KeyEditorInput = styled(Input)`
+export const KeyEditorInput: React.ComponentType<any> = styled(Input)`
   flex: 1;
   height: 100%;
   display: flex;
