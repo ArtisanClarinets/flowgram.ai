@@ -127,55 +127,23 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.get('/api/files', (req, res) => {
-    const dir = req.query.path as string || DEFAULT_ROOT_DIR;
     try {
-// Resolve user-supplied dir relative to DEFAULT_ROOT_DIR and block access if outside
-const rawPath = req.query.path as string || "";
-const dir = path.resolve(DEFAULT_ROOT_DIR, rawPath);
-if (!dir.startsWith(DEFAULT_ROOT_DIR)) {
-    return res.status(403).json({ message: "Access denied" });
-}
-if (!fs.existsSync(dir)) return res.status(404).json({ message: "Path not found" });
+        const rawPath = req.query.path as string || "";
+        const dir = path.resolve(DEFAULT_ROOT_DIR, rawPath);
 
-const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
-    name: dirent.name,
-    isDirectory: dirent.isDirectory(),
-    path: path.join(dir, dirent.name)
-}));
+        // Security check: Ensure dir is within DEFAULT_ROOT_DIR
+        if (!dir.startsWith(DEFAULT_ROOT_DIR)) {
+            return res.status(403).json({ message: "Access denied" });
+        }
 
-res.json({ files, currentPath: dir });
+        if (!fs.existsSync(dir)) {
+            return res.status(404).json({ message: "Path not found" });
+        }
 
-// Validate and restrict user-supplied file paths to stay within a safe base directory before accessing the file system.
-const root = path.resolve(DEFAULT_ROOT_DIR);
-const targetDir = path.resolve(root, req.query.path as string || '');
-if (!targetDir.startsWith(root)) {
-    return res.status(403).json({ message: "Access denied" });
-}
-if (!fs.existsSync(targetDir)) return res.status(404).json({ message: "Path not found" });
-
-const files = fs.readdirSync(targetDir, { withFileTypes: true }).map(dirent => ({
-    name: dirent.name,
-    isDirectory: dirent.isDirectory(),
-    path: path.join(targetDir, dirent.name)
-}));
-
-res.json({ files, currentPath: targetDir });
+        const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
             name: dirent.name,
             isDirectory: dirent.isDirectory(),
-// Ensure returned path is always within DEFAULT_ROOT_DIR
-// Resolve dirent path and verify it starts with DEFAULT_ROOT_DIR
-// If it doesn't, do not include it (prevent path traversal listing)
-// Otherwise, include the securely resolved path
-path: (() => {
-    const reqPath = typeof req.query.path === 'string' ? req.query.path : '';
-    const baseDir = path.resolve(DEFAULT_ROOT_DIR, reqPath);
-    const entryPath = path.resolve(baseDir, dirent.name);
-    if (!entryPath.startsWith(DEFAULT_ROOT_DIR)) {
-        // If path traversal attempt, do not reveal actual path
-        return null;
-    }
-    return entryPath;
-})()
+            path: path.join(dir, dirent.name)
         }));
 
         res.json({ files, currentPath: dir });
@@ -188,7 +156,13 @@ app.get('/api/file', (req, res) => {
     const filePath = req.query.path as string;
     if (!filePath) return res.status(400).json({ message: "Path required" });
     try {
-        const content = fs.readFileSync(filePath, 'utf-8');
+        // Security check: Ensure filePath is within DEFAULT_ROOT_DIR
+        const resolvedPath = path.resolve(DEFAULT_ROOT_DIR, filePath);
+        if (!resolvedPath.startsWith(DEFAULT_ROOT_DIR)) {
+             return res.status(403).json({ message: "Access denied" });
+        }
+
+        const content = fs.readFileSync(resolvedPath, 'utf-8');
         res.json({ content });
     } catch (e: any) {
         res.status(500).json({ message: e.message });
