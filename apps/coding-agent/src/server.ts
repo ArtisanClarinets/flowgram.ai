@@ -157,7 +157,14 @@ app.get('/api/file', (req, res) => {
     if (!filePath) return res.status(400).json({ message: "Path required" });
     try {
         // Security check: Ensure filePath is within DEFAULT_ROOT_DIR
-        const resolvedPath = path.resolve(DEFAULT_ROOT_DIR, filePath);
+// Always resolve user-supplied paths relative to DEFAULT_ROOT_DIR.
+const resolvedPath = path.resolve(DEFAULT_ROOT_DIR, filePath);
+
+// Normalize both resolvedPath and DEFAULT_ROOT_DIR for safe comparison.
+const normalizedRoot = path.resolve(DEFAULT_ROOT_DIR) + path.sep;
+if (!resolvedPath.startsWith(normalizedRoot)) {
+    return res.status(403).json({ message: "Access denied" });
+}
         if (!resolvedPath.startsWith(DEFAULT_ROOT_DIR)) {
              return res.status(403).json({ message: "Access denied" });
         }
