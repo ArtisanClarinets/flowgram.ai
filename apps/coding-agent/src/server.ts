@@ -183,7 +183,11 @@ if (!resolvedPath.startsWith(normalizedRoot)) {
              return res.status(403).json({ message: "Access denied" });
         }
 
-        const content = fs.readFileSync(resolvedPath, 'utf-8');
+// Check if the file exists before reading it
+if (!fs.existsSync(resolvedPath)) {
+    return res.status(404).json({ message: "File not found" });
+}
+const content = fs.readFileSync(resolvedPath, 'utf-8');
         res.json({ content });
     } catch (e: any) {
         res.status(500).json({ message: e.message });
