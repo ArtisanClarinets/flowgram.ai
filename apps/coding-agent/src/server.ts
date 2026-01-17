@@ -7,7 +7,16 @@ import fs from 'fs';
 import { indexCodebase } from './indexer';
 
 const app = express();
-app.use(cors());
+// It's important to restrict CORS to allow only trusted origins.
+// Replace 'https://example.com' with your actual frontend origin(s). 
+// You can also use an environment variable for flexibility in different environments.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['https://example.com'];
+
+app.use(cors({
+    origin: allowedOrigins,
+}));
 app.use(express.json());
 
 const PORT = 3001;
