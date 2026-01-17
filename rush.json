@@ -446,6 +446,22 @@
             ]
         },
         {
+            "packageName": "@flowgram.ai/coding-agent-ui",
+            "projectFolder": "apps/coding-agent-ui",
+            "versionPolicyName": "publishPolicy",
+            "tags": [
+                "app"
+            ]
+        },
+        {
+            "packageName": "@flowgram.ai/coding-agent",
+            "projectFolder": "apps/coding-agent",
+            "versionPolicyName": "publishPolicy",
+            "tags": [
+                "cli"
+            ]
+        },
+        {
             "packageName": "@flowgram.ai/cli",
             "projectFolder": "apps/cli",
             "versionPolicyName": "publishPolicy",
