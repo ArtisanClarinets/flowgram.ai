@@ -129,7 +129,21 @@ app.post('/api/chat', async (req, res) => {
 app.get('/api/files', (req, res) => {
     const dir = req.query.path as string || DEFAULT_ROOT_DIR;
     try {
-        if (!fs.existsSync(dir)) return res.status(404).json({ message: "Path not found" });
+// Resolve user-supplied dir relative to DEFAULT_ROOT_DIR and block access if outside
+const rawPath = req.query.path as string || "";
+const dir = path.resolve(DEFAULT_ROOT_DIR, rawPath);
+if (!dir.startsWith(DEFAULT_ROOT_DIR)) {
+    return res.status(403).json({ message: "Access denied" });
+}
+if (!fs.existsSync(dir)) return res.status(404).json({ message: "Path not found" });
+
+const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
+    name: dirent.name,
+    isDirectory: dirent.isDirectory(),
+    path: path.join(dir, dirent.name)
+}));
+
+res.json({ files, currentPath: dir });
 
         const files = fs.readdirSync(dir, { withFileTypes: true }).map(dirent => ({
             name: dirent.name,
